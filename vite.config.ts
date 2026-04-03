@@ -1,19 +1,18 @@
 import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
-// https://vitejs.dev/config/
 export default defineConfig({
-  base: "/",
+  base: '/',
   build: {
     sourcemap: true,
-    assetsDir: "code",
-    target: ["esnext"],
+    assetsDir: 'code',
+    target: ['esnext'],
     cssMinify: true,
-    lib: false
+    lib: false,
   },
   plugins: [
     VitePWA({
-      strategies: "injectManifest",
+      strategies: 'injectManifest',
       injectManifest: {
         swSrc: 'src/sw.ts',
         swDest: 'sw.js',
@@ -23,8 +22,8 @@ export default defineConfig({
       injectRegister: false,
       manifest: false,
       devOptions: {
-        enabled: true
-      }
-    })
-  ]
-})
+        enabled: true,
+      },
+    }),
+  ],
+});

@@ -1,0 +1,28 @@
+{
+  "name": "Dashboard Hafazan al-Farabi",
+  "short_name": "Hafazan KKQ",
+  "start_url": "/?utm_source=pwa",
+  "display": "standalone",
+  "background_color": "#f1f5f9",
+  "theme_color": "#2563eb",
+  "description": "Pantau kemajuan hafazan murid kelas 1AF, 2AF dan 3AF dalam PWA ringan.",
+  "orientation": "portrait",
+  "categories": ["education", "productivity"],
+  "icons": [
+    {
+      "src": "/assets/icons/kkq144.png",
+      "sizes": "144x144",
+      "type": "image/png"
+    },
+    {
+      "src": "/assets/icons/kkq192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/assets/icons/kkq512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
