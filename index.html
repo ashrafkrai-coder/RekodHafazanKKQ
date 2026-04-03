@@ -13,32 +13,183 @@
   <meta name="theme-color" content="#2563eb" />
   <link rel="apple-touch-icon" href="/assets/icons/kkq192.png" />
   <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.16.0/cdn/shoelace.js"></script>
+
+  <style>
+    body {
+      font-family: var(--sl-font-sans);
+      background-color: #f1f5f9;
+      padding: 20px;
+      color: #334155;
+    }
+    .container { max-width: 600px; margin: 0 auto; }
+    .header { text-align: center; margin-bottom: 25px; }
+
+    .nav-kelas {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      margin-bottom: 30px;
+    }
+
+    .penyelia {
+      font-size: 0.75rem;
+      color: #475467;
+      margin: 0 auto 12px;
+      text-transform: none;
+      letter-spacing: 0.02em;
+    }
+
+    .murid-card {
+      margin-bottom: 15px;
+      background: white;
+      border-radius: 15px;
+      box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+      padding: 20px;
+      border: 1px solid #e2e8f0;
+    }
+
+    .nama-murid {
+      font-weight: 700;
+      display: block;
+      margin-bottom: 12px;
+      font-size: 0.9rem;
+      text-transform: uppercase;
+      color: #1e293b;
+      border-left: 4px solid var(--sl-color-primary-500);
+      padding-left: 10px;
+    }
+
+    .surah-container {
+      background: #f8fafc;
+      padding: 10px;
+      border-radius: 8px;
+      margin-top: 8px;
+    }
+
+    .surah-label {
+      font-size: 0.7rem;
+      font-weight: 600;
+      color: #64748b;
+      text-transform: uppercase;
+      margin-bottom: 4px;
+      display: block;
+    }
+
+    .progress-wrapper {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    sl-progress-bar {
+      flex-grow: 1;
+      --height: 12px;
+      --track-color: #e2e8f0;
+    }
+
+    .peratus-teks {
+      font-weight: 700;
+      min-width: 40px;
+      text-align: right;
+      color: var(--sl-color-primary-600);
+      font-size: 0.85rem;
+    }
+  </style>
 </head>
 
 <body>
-  <div id="app">
-    <div class="container">
-      <div class="header">
-        <h2 style="color: var(--sl-color-primary-600); margin-bottom: 8px;">REKOD HAFAZAN KELAS KEMAHIRAN AL-QURAN 2026</h2>
-        <p class="penyelia">Nama Guru: Ust Muhammad Ashraf bin Kamarul zaman</p>
-        <sl-badge variant="success" pill id="badgeKelas">KELAS 1AF</sl-badge>
-      </div>
+  <div class="container">
+    <div class="header">
+      <h2 style="color: var(--sl-color-primary-600); margin-bottom: 8px;">REKOD HAFAZAN KELAS KEMAHIRAN AL-QURAN 2026</h2>
+      <p class="penyelia">Nama Guru: Ust Muhammad Ashraf bin Kamarul zaman</p>
+      <sl-badge variant="success" pill id="badgeKelas">KELAS 1AF</sl-badge>
+    </div>
 
-      <div class="nav-kelas" role="tablist" aria-label="Pilih kelas">
-        <sl-button size="small" variant="primary" data-kelas="1AF" pill role="tab" aria-selected="true">1AF</sl-button>
-        <sl-button size="small" data-kelas="2AF" pill role="tab" aria-selected="false">2AF</sl-button>
-        <sl-button size="small" data-kelas="3AF" pill role="tab" aria-selected="false">3AF</sl-button>
-      </div>
+    <div class="nav-kelas">
+      <sl-button size="small" variant="primary" onclick="tukarKelas('1AF', this)" pill>1AF</sl-button>
+      <sl-button size="small" onclick="tukarKelas('2AF', this)" pill>2AF</sl-button>
+      <sl-button size="small" onclick="tukarKelas('3AF', this)" pill>3AF</sl-button>
+    </div>
 
-      <div id="senaraiHafazan">
-        <div style="text-align:center; padding: 50px;">
-          <sl-spinner style="font-size: 2rem;"></sl-spinner>
-          <p style="color: #64748b; margin-top: 10px;">Menarik data dari Google Sheets...</p>
-        </div>
+    <div id="senaraiHafazan">
+      <div style="text-align:center; padding: 50px;">
+        <sl-spinner style="font-size: 2rem;"></sl-spinner>
+        <p style="color: #64748b; margin-top: 10px;">Menarik data dari Google Sheets...</p>
       </div>
     </div>
   </div>
 
-  <script type="module" src="/src/main.ts"></script>
+  <script>
+    // MASUKKAN URL WEB APP ANDA DI SINI
+    const SHEET_URL = "https://script.google.com/macros/s/AKfycbx7y_x8u9moo2yp-TY-lVZpJLFufYGV-vLZy_iIu8WhyZqSKVZxYPC3dmzeI-wDj7Po/exec";
+    let kelasSemasa = "1AF";
+
+    function tukarKelas(namaTab, btn) {
+      kelasSemasa = namaTab;
+      document.querySelectorAll('.nav-kelas sl-button').forEach(b => b.variant = 'default');
+      btn.variant = 'primary';
+      document.getElementById('badgeKelas').innerText = `KELAS ${namaTab}`;
+      muatData();
+    }
+
+    async function muatData() {
+      const container = document.getElementById('senaraiHafazan');
+      container.innerHTML = '<div style="text-align:center; padding: 50px;"><sl-spinner style="font-size: 2rem;"></sl-spinner></div>';
+
+      try {
+        const res = await fetch(`${SHEET_URL}?kelas=${encodeURIComponent(kelasSemasa)}`);
+        const data = await res.json();
+
+        if (data.error) {
+           container.innerHTML = `<sl-alert variant="warning" open>${data.error}</sl-alert>`;
+           return;
+        }
+
+        container.innerHTML = '';
+
+        data.forEach(murid => {
+          // Fungsi untuk tentukan warna (Hijau jika 100%, Biru jika belum)
+          const dapatWarna = (skor) => skor >= 100 ? 'var(--sl-color-success-500)' : 'var(--sl-color-primary-500)';
+
+          const div = document.createElement('div');
+          div.className = 'murid-card';
+          div.innerHTML = `
+            <span class="nama-murid">${murid.Nama}</span>
+
+            <div class="surah-container">
+              <span class="surah-label">${murid.Surah1_Nama || 'Surah 1'}</span>
+              <div class="progress-wrapper">
+                <sl-progress-bar value="${murid.Surah1_Skor}" style="--indicator-color: ${dapatWarna(murid.Surah1_Skor)};"></sl-progress-bar>
+                <span class="peratus-teks">${murid.Surah1_Skor}%</span>
+              </div>
+            </div>
+
+            <div class="surah-container">
+              <span class="surah-label">${murid.Surah2_Nama || 'Surah 2'}</span>
+              <div class="progress-wrapper">
+                <sl-progress-bar value="${murid.Surah2_Skor}" style="--indicator-color: ${dapatWarna(murid.Surah2_Skor)};"></sl-progress-bar>
+                <span class="peratus-teks">${murid.Surah2_Skor}%</span>
+              </div>
+            </div>
+          `;
+          container.appendChild(div);
+        });
+
+      } catch (e) {
+        container.innerHTML = `<sl-alert variant="danger" open>Gagal memuatkan data. Sila semak URL atau 'Deployment' anda.</sl-alert>`;
+      }
+    }
+
+    window.onload = muatData;
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", () => {
+        navigator.serviceWorker
+          .register("/sw.js")
+          .catch((err) =>
+            console.error("Service worker registration failed", err)
+          );
+      });
+    }
+  </script>
 </body>
 </html>

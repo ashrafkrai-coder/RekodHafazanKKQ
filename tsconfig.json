@@ -30,6 +30,10 @@
       "vite/client"
     ]
   },
-  "include": ["src/**/*.ts", "router.d.ts", "src/**/*.d.ts"], // Pastikan d.ts disertakan
+  "include": ["src/**/*.ts", "src/**/*.d.ts"], // Pastikan d.ts disertakan
+  "files": [
+    "src/app-index.ts",
+    "src/sw.ts"
+  ],
   "exclude": ["node_modules"]
 }
