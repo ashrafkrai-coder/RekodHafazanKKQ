@@ -12,10 +12,10 @@ export default defineConfig({
   },
   plugins: [
     VitePWA({
+      srcDir: 'src',
+      filename: 'sw.ts',
       strategies: 'injectManifest',
       injectManifest: {
-        swSrc: 'src/sw.ts',
-        swDest: 'sw.js',
         globDirectory: 'dist',
         globPatterns: ['**/*.{html,js,css,json,webmanifest,png,svg,ico}'],
       },

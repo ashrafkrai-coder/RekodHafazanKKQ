@@ -12,6 +12,7 @@
     "declaration": true,
     "emitDeclarationOnly": true,
     "skipLibCheck": true,
+    "rootDir": ".",
     "outDir": "./types",
     "strict": true,
     "noUnusedLocals": true,
@@ -23,17 +24,8 @@
     "experimentalDecorators": true,
     "forceConsistentCasingInFileNames": true,
     "useDefineForClassFields": false,
-    "isolatedModules": true,
-    "types": [
-      "vite-plugin-pwa/client",
-      "vite-plugin-pwa/info", // Tambah ini untuk metadata pwa
-      "vite/client"
-    ]
+    "isolatedModules": true
   },
-  "include": ["src/**/*.ts", "src/**/*.d.ts"], // Pastikan d.ts disertakan
-  "files": [
-    "src/app-index.ts",
-    "src/sw.ts"
-  ],
+  "include": ["src/**/*.ts", "src/**/*.d.ts", "src/env.d.ts"], // Pastikan d.ts disertakan
   "exclude": ["node_modules"]
 }

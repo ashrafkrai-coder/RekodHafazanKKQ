@@ -1,4 +1,4 @@
-# Dashbord Hafazan al-Farabi
+# Dashbord Hafazan UTQH
 
 Dashboard ini direka untuk memaparkan pencapaian hafazan murid kelas `1AF`, `2AF` dan `3AF` dalam satu aplikasi PWA yang ringan. Carta bar memaparkan pelajar tertinggi setiap kelas manakala jadual dan kad-kad statistik memudahkan guru menilai kelas mana yang memerlukan perhatian segera.
 
@@ -35,6 +35,8 @@ VITE_HAFAZAN_SCRIPT_URL=https://script.google.com/macros/s/AKfycbx7y_x8u9moo2yp-
 ```
 
 > Jika `SHEET_ID` tidak disetel (atau anda menggunakan Google Apps Script), dashboard akan memaparkan data contoh tetapi masih boleh dibina.
+>
+> Apabila `VITE_HAFAZAN_SHEET_ID` ditetapkan, aplikasi akan memanggil `gviz/tq?out:json` terus daripada helaian. Jika anda mahu menggunakan skrip tersendiri untuk memproses helaian, set `VITE_HAFAZAN_SCRIPT_URL` dan ia akan mengatasi konfigurasi helaian (jika kedua-duanya wujud). Jika tiada nilai untuk kedua-duanya, aplikasi akan menggunakan skrip lalai (`FALLBACK_SCRIPT_URL`) untuk memaparkan data contoh dan menyokong pembangunan awal.
 
 ### Alternatif: Google Apps Script
 
@@ -44,7 +46,7 @@ VITE_HAFAZAN_SCRIPT_URL=https://script.google.com/macros/s/AKfycbx7y_x8u9moo2yp-
 
 ## Ciri PWA
 
-- Service worker Workbox terpasang melalui `vite-plugin-pwa` dan `public/sw.js`.
+- Service worker Workbox terpasang melalui `vite-plugin-pwa` dan `src/sw.ts`.
 - `manifest.json` kini menamakan aplikasi `Dashbord Hafazan al-Farabi` dengan tema warna biru laut.
 - Aplikasi boleh dipasang pada peranti dan berjalan offline dengan versi terakhir yang dimuat turun.
 

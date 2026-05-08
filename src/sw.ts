@@ -1,7 +1,7 @@
 import { clientsClaim } from 'workbox-core';
 import { precacheAndRoute, PrecacheEntry } from 'workbox-precaching';
 import { registerRoute } from 'workbox-routing';
-import { NetworkFirst, StaleWhileRevalidate } from 'workbox-strategies';
+import { NetworkFirst, NetworkOnly, StaleWhileRevalidate } from 'workbox-strategies';
 
 declare const self: ServiceWorkerGlobalScope & {
   __WB_MANIFEST: PrecacheEntry[];
@@ -28,9 +28,8 @@ registerRoute(
 );
 
 registerRoute(
-  ({ url }) => url.hostname.endsWith('google.com') && url.pathname.includes('/macros/s/'),
-  new NetworkFirst({
-    cacheName: 'hafazan-data',
-    networkTimeoutSeconds: 4,
-  }),
+  ({ url }) =>
+    url.hostname.endsWith('google.com') &&
+    (url.pathname.includes('/macros/s/') || url.pathname.includes('/gviz/tq')),
+  new NetworkOnly(),
 );

@@ -12,9 +12,23 @@ type ProgressBarElement = HTMLElement & {
 
 const FALLBACK_SCRIPT_URL =
   'https://script.google.com/macros/s/AKfycbx7y_x8u9moo2yp-TY-lVZpJLFufYGV-vLZy_iIu8WhyZqSKVZxYPC3dmzeI-wDj7Po/exec';
+const SHEETS_BASE_URL = 'https://docs.google.com/spreadsheets/d';
 
+const envSheetId = (import.meta.env.VITE_HAFAZAN_SHEET_ID ?? '').toString().trim();
+const envSheetName = (import.meta.env.VITE_HAFAZAN_SHEET_NAME ?? 'Rekod Hafazan').toString().trim();
+const envSheetRange = (import.meta.env.VITE_HAFAZAN_SHEET_RANGE ?? 'A1:F200').toString().trim();
+const envNameColumn = (import.meta.env.VITE_HAFAZAN_NAME_COLUMN ?? 'Nama').toString().trim();
+const envClassColumn = (import.meta.env.VITE_HAFAZAN_CLASS_COLUMN ?? 'Kelas').toString().trim();
+const envMetricColumn = (import.meta.env.VITE_HAFAZAN_METRIC_COLUMN ?? 'Peratus').toString().trim();
+const envSummaryColumn = (import.meta.env.VITE_HAFAZAN_SUMMARY_COLUMN ?? 'Surah').toString().trim();
+const envUpdatedColumn = (import.meta.env.VITE_HAFAZAN_UPDATED_COLUMN ?? 'Tarikh').toString().trim();
 const envScriptUrl = (import.meta.env.VITE_HAFAZAN_SCRIPT_URL ?? '').toString().trim();
-const scriptUrl = envScriptUrl.length ? envScriptUrl : FALLBACK_SCRIPT_URL;
+
+const hasSheetId = envSheetId.length > 0;
+const hasScriptUrl = envScriptUrl.length > 0;
+const usingSheet = hasSheetId && !hasScriptUrl;
+const scriptUrl = hasScriptUrl ? envScriptUrl : hasSheetId ? '' : FALLBACK_SCRIPT_URL;
+const DATA_REFRESH_INTERVAL_MS = 60_000;
 
 const spinnerPlaceholder = `
   <div class="placeholder">
@@ -39,6 +53,7 @@ const surahSlots = [
 let kelasSemasa = '1AF';
 let navButtons: NavButtonElement[] = [];
 let dataContainer: HTMLElement | null = null;
+let activeLoadToken = 0;
 const badge = typeof document !== 'undefined' ? document.getElementById('badgeKelas') : null;
 
 const numberKeys = (value: unknown): number => {
@@ -156,6 +171,223 @@ const normalizeResponse = (payload: unknown): HafazanRecord[] => {
   return [];
 };
 
+type ColumnMeta = {
+  label: string;
+  normalized: string;
+  index: number;
+};
+
+type GvizTable = {
+  cols?: { label?: string; id?: string }[];
+  rows?: { c?: { v?: unknown; f?: string }[] }[];
+};
+
+const NAME_COLUMN_FALLBACKS = ['Nama', 'Nama Pelajar', 'Nama Lengkap', 'name'];
+const CLASS_COLUMN_FALLBACKS = ['Kelas', 'kelas', 'Class'];
+const METRIC_COLUMN_FALLBACKS = ['Peratus', 'Skor', 'Nilai', 'Markah', 'Peratusan'];
+const SUMMARY_COLUMN_FALLBACKS = ['Surah', 'Catatan', 'Nota'];
+const UPDATED_COLUMN_FALLBACKS = ['Tarikh', 'Kemaskini', 'Updated', 'Tarikh Kemaskini'];
+
+const FIELD_ALIAS_TARGETS = {
+  name: ['Nama', 'Nama Pelajar', 'name'] as const,
+  class: ['Kelas', 'kelas'] as const,
+  metric: ['Peratus', 'Skor', 'Nilai', 'Markah'] as const,
+  summary: ['Surah', 'Catatan', 'Nota'] as const,
+  updated: ['Tarikh', 'Kemaskini', 'Updated'] as const,
+};
+
+const normalizeKey = (value: string) => value.toLowerCase().replace(/\s+/g, ' ').trim();
+
+const buildColumnMeta = (cols: { label?: string; id?: string }[]): ColumnMeta[] =>
+  cols.map((col, index) => {
+    const rawLabel =
+      (typeof col.label === 'string' && col.label.trim()) ||
+      (typeof col.id === 'string' && col.id.trim()) ||
+      `column_${index + 1}`;
+    return {
+      label: rawLabel,
+      normalized: normalizeKey(rawLabel),
+      index,
+    };
+  });
+
+const buildColumnCandidates = (envValue: string, defaults: string[]) => {
+  const list = [...defaults];
+  if (envValue.length) {
+    list.unshift(envValue);
+  }
+  return Array.from(new Set(list.map(normalizeKey))).filter(Boolean);
+};
+
+const findColumnLabel = (columns: ColumnMeta[], candidates: string[]) => {
+  if (!columns.length || !candidates.length) {
+    return undefined;
+  }
+
+  for (const column of columns) {
+    if (candidates.includes(column.normalized)) {
+      return column.label;
+    }
+  }
+
+  return undefined;
+};
+
+const applyFieldAliases = (
+  record: HafazanRecord,
+  columnLabel: string | undefined,
+  aliasTargets: readonly string[],
+) => {
+  if (!columnLabel) {
+    return record;
+  }
+
+  const value = record[columnLabel];
+  if (value == null) {
+    return record;
+  }
+
+  const mutated = { ...record };
+  for (const alias of aliasTargets) {
+    if (!(alias in mutated)) {
+      mutated[alias] = value;
+    }
+  }
+
+  return mutated;
+};
+
+const buildSheetRequestUrl = () => {
+  if (!hasSheetId) {
+    return null;
+  }
+
+  const params = new URLSearchParams({ tqx: 'out:json' });
+  if (envSheetName.length) {
+    params.set('sheet', envSheetName);
+  }
+  if (envSheetRange.length) {
+    params.set('range', envSheetRange);
+  }
+  params.set('_ts', Date.now().toString());
+
+  return `${SHEETS_BASE_URL}/${envSheetId}/gviz/tq?${params.toString()}`;
+};
+
+const parseGvizPayload = (raw: string) => {
+  const trimmed = raw.trim();
+  const marker = 'google.visualization.Query.setResponse(';
+  const startIndex = trimmed.indexOf(marker);
+  const endIndex = trimmed.lastIndexOf(');');
+  const jsonText =
+    startIndex !== -1 && endIndex !== -1 && endIndex > startIndex
+      ? trimmed.slice(startIndex + marker.length, endIndex)
+      : trimmed;
+
+  return JSON.parse(jsonText);
+};
+
+const buildRecordFromRow = (row: { c?: { v?: unknown; f?: string }[] } | undefined, columns: ColumnMeta[]) => {
+  const record: HafazanRecord = {};
+  const cells = row?.c ?? [];
+
+  cells.forEach((cell, index) => {
+    const column = columns[index];
+    if (!column) {
+      return;
+    }
+
+    const value = cell?.v ?? cell?.f ?? null;
+    record[column.label] = value;
+  });
+
+  return record;
+};
+
+const loadFromSheet = async (kelas: string) => {
+  const url = buildSheetRequestUrl();
+  if (!url) {
+    throw new Error('VITE_HAFAZAN_SHEET_ID tidak dikonfigurasikan.');
+  }
+
+  const response = await fetch(url, { cache: 'no-store' });
+  if (!response.ok) {
+    throw new Error(`Pelayan mengembalikan kod ${response.status}`);
+  }
+
+  const text = await response.text();
+  const payload = parseGvizPayload(text);
+  const table = (payload as { table?: GvizTable }).table;
+  if (!table) {
+    throw new Error('Google Sheets tidak mengembalikan jadual data.');
+  }
+
+  const columns = buildColumnMeta(table.cols ?? []);
+  const nameCandidates = buildColumnCandidates(envNameColumn, NAME_COLUMN_FALLBACKS);
+  const classCandidates = buildColumnCandidates(envClassColumn, CLASS_COLUMN_FALLBACKS);
+  const metricCandidates = buildColumnCandidates(envMetricColumn, METRIC_COLUMN_FALLBACKS);
+  const summaryCandidates = buildColumnCandidates(envSummaryColumn, SUMMARY_COLUMN_FALLBACKS);
+  const updatedCandidates = buildColumnCandidates(envUpdatedColumn, UPDATED_COLUMN_FALLBACKS);
+
+  const aliasSources = {
+    name: findColumnLabel(columns, nameCandidates),
+    class: findColumnLabel(columns, classCandidates),
+    metric: findColumnLabel(columns, metricCandidates),
+    summary: findColumnLabel(columns, summaryCandidates),
+    updated: findColumnLabel(columns, updatedCandidates),
+  };
+
+  const enrichRecord = (record: HafazanRecord) => {
+    let decorated = record;
+    decorated = applyFieldAliases(decorated, aliasSources.name, FIELD_ALIAS_TARGETS.name);
+    decorated = applyFieldAliases(decorated, aliasSources.class, FIELD_ALIAS_TARGETS.class);
+    decorated = applyFieldAliases(decorated, aliasSources.metric, FIELD_ALIAS_TARGETS.metric);
+    decorated = applyFieldAliases(decorated, aliasSources.summary, FIELD_ALIAS_TARGETS.summary);
+    decorated = applyFieldAliases(decorated, aliasSources.updated, FIELD_ALIAS_TARGETS.updated);
+    return decorated;
+  };
+
+  const rows = table.rows ?? [];
+  const records = rows.map((row) => enrichRecord(buildRecordFromRow(row, columns)));
+
+  if (!aliasSources.class) {
+    return records;
+  }
+
+  const normalizedClass = kelas.trim().toLowerCase();
+  return records.filter((record) => {
+    const value = (record['Kelas'] ?? record['kelas'] ?? '').toString().trim().toLowerCase();
+    return value === normalizedClass;
+  });
+};
+
+const buildScriptRequestUrl = (kelas: string) => {
+  if (!scriptUrl) {
+    return null;
+  }
+
+  const params = new URLSearchParams({
+    kelas,
+    _ts: Date.now().toString(),
+  });
+  return `${scriptUrl}?${params.toString()}`;
+};
+
+const loadFromScript = async (kelas: string) => {
+  const url = buildScriptRequestUrl(kelas);
+  if (!url) {
+    throw new Error('Tiada URL Google Apps Script dikonfigurasikan.');
+  }
+
+  const response = await fetch(url, { cache: 'no-store' });
+  if (!response.ok) {
+    throw new Error(`Pelayan mengembalikan kod ${response.status}`);
+  }
+
+  const payload = await response.json();
+  return normalizeResponse(payload);
+};
+
 const updateBadge = () => {
   if (badge) {
     badge.textContent = `KELAS ${kelasSemasa}`;
@@ -200,35 +432,19 @@ const setUpNavigation = () => {
   });
 };
 
-const buildSheetUrl = (kelas: string) => {
-  if (!scriptUrl) {
-    return null;
-  }
-  return `${scriptUrl}?kelas=${encodeURIComponent(kelas)}`;
-};
-
 const muatData = async () => {
   if (!dataContainer) {
     return;
   }
 
+  const loadToken = ++activeLoadToken;
   dataContainer.innerHTML = spinnerPlaceholder;
-  const url = buildSheetUrl(kelasSemasa);
-
-  if (!url) {
-    dataContainer.innerHTML =
-      '<sl-alert variant="warning" open>Tiada URL Google Apps Script dikonfigurasikan. Tambahkan VITE_HAFAZAN_SCRIPT_URL.</sl-alert>';
-    return;
-  }
 
   try {
-    const response = await fetch(url, { cache: 'no-store' });
-    if (!response.ok) {
-      throw new Error(`Pelayan mengembalikan kod ${response.status}`);
+    const records = usingSheet ? await loadFromSheet(kelasSemasa) : await loadFromScript(kelasSemasa);
+    if (loadToken !== activeLoadToken) {
+      return;
     }
-
-    const payload = await response.json();
-    const records = normalizeResponse(payload);
 
     if (!records.length) {
       dataContainer.innerHTML = `<sl-alert variant="info" open>Tiada data untuk kelas ${kelasSemasa}.</sl-alert>`;
@@ -240,9 +456,29 @@ const muatData = async () => {
       dataContainer?.appendChild(createMuridCard(murid));
     });
   } catch (error) {
+    if (loadToken !== activeLoadToken) {
+      return;
+    }
+
     const message = error instanceof Error ? error.message : 'Ralat tidak dikenal pasti';
     dataContainer.innerHTML = `<sl-alert variant="danger" open>Gagal memuatkan data: ${message}</sl-alert>`;
   }
+};
+
+const setUpAutoRefresh = () => {
+  window.setInterval(() => {
+    void muatData();
+  }, DATA_REFRESH_INTERVAL_MS);
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      void muatData();
+    }
+  });
+
+  window.addEventListener('focus', () => {
+    void muatData();
+  });
 };
 
 const registerServiceWorker = () => {
@@ -261,6 +497,7 @@ window.addEventListener('DOMContentLoaded', () => {
   dataContainer = document.getElementById('senaraiHafazan');
   setUpNavigation();
   updateBadge();
+  setUpAutoRefresh();
   muatData();
   registerServiceWorker();
 });
